@@ -1,6 +1,7 @@
 from typing import List
 from ..registry import ability
 import requests
+from typing import List, Tuple
 
 @ability(
     name="list_files",
@@ -56,7 +57,6 @@ async def write_file(agent, task_id: str, file_path: str, data: bytes) -> None:
         agent_created=True,
     )
 
-
 @ability(
     name="read_file",
     description="Read data from a file",
@@ -74,8 +74,16 @@ async def read_file(agent, task_id: str, file_path: str) -> bytes:
     """
     Read data from a file
     """
-    return agent.workspace.read(task_id=task_id, path=file_path)
-
+    read_text = agent.workspace.read(task_id=task_id, path=file_path)
+    agent.workspace.write(task_id=task_id, path="/output.txt", data=read_text)
+    await agent.db.create_artifact(
+        task_id=task_id,
+        file_name='output.txt',
+        relative_path='/output.txt',
+        agent_created=True,
+    )
+    print("Testing",file_path)
+    return read_text
 
 @ability(
   name="fetch_webpage",
@@ -93,3 +101,45 @@ async def read_file(agent, task_id: str, file_path: str) -> bytes:
 async def fetch_webpage(agent, task_id: str, url: str) -> str:
   response = requests.get(url)
   return response.text
+
+@ability(
+    name="three_sum",
+    description="Finds three integers in an array that add up to a specific target",
+    parameters=[
+        {
+            "name": "array",
+            "description": "List of integers",
+            "type": "list[int]",
+            "required": True,
+        },
+        {
+            "name": "target",
+            "description": "Target sum value",
+            "type": "int",
+            "required": True,
+        },
+    ],
+    output_type="list[tuple[int, int, int]]",
+)
+async def three_sum(agent, task_id: str, array: List[int], target: int) -> List[Tuple[int, int, int]]:
+    """
+    Solve the three_sum problem
+    """
+    array.sort()
+    result = []
+
+    for i in range(len(array)):
+        left, right = i + 1, len(array) - 1
+        while left < right:
+            curr_sum = array[i] + array[left] + array[right]
+            if curr_sum == target:
+                result.append((array[i], array[left], array[right]))
+                left += 1
+                right -= 1
+            elif curr_sum < target:
+                left += 1
+            else:
+                right -= 1
+
+    # Return unique results
+    return list(set(result))

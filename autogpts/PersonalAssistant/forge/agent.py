@@ -1,5 +1,6 @@
 import json
 import pprint
+import importlib
 from .sdk import PromptEngine
 
 from forge.sdk import (
@@ -107,8 +108,7 @@ class ForgeAgent(Agent):
         # Log the message
         LOG.info(f"\t✅ Final Step completed: {step.step_id} input: {step.input[:19]}")
 
-        # Initialize the PromptEngine with the "gpt-3.5-turbo" model
-        prompt_engine = PromptEngine("gpt-3.5-turbo")
+        prompt_engine = PromptEngine("gpt-3.5-turbo-16k")
 
         # Load the system and task prompts
         system_prompt = prompt_engine.load_prompt("system-format")
@@ -133,7 +133,7 @@ class ForgeAgent(Agent):
             # Define the parameters for the chat completion request
             chat_completion_kwargs = {
                 "messages": messages,
-                "model": "gpt-3.5-turbo",
+                "model": "gpt-3.5-turbo-16k",
             }
             # Make the chat completion request and parse the response
             chat_response = await chat_completion_request(**chat_completion_kwargs)
@@ -152,11 +152,21 @@ class ForgeAgent(Agent):
         # Extract the ability from the answer
         ability = answer["ability"]
 
-        # Run the ability and get the output
-        # We don't actually use the output in this example
-        output = await self.abilities.run_ability(
-            task_id, ability["name"], **ability["args"]
-        )
+        try:
+            if "." in ability["name"]:
+                module_name, function_name = ability["name"].split('.')
+                module = importlib.import_module(module_name)
+                function = getattr(module, function_name)
+                output = await function(task_id, **ability["args"])
+            else:
+                # Existing logic to run other abilities
+                output = await self.abilities.run_ability(
+                    task_id, ability["name"], **ability["args"]
+                )
+        except KeyError:
+            LOG.error(f"Ability '{ability['name']}' not found in registered abilities.")
+            step.output = f"Sorry, I cannot execute the ability named '{ability['name']}' as it is not defined."
+            return step
 
         # Set the step output to the "speak" part of the answer
         step.output = answer["thoughts"]["speak"]
